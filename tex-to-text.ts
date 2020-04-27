@@ -1,7 +1,9 @@
 // @ts-ignore: 1375
 //
 // run like `deno --allow-read --allow-write tex-to-text.ts --infile <<path-to-tex-file>>`
-// repro note: works like this: `deno --allow-net --allow-read --allow-write /d/workspace/github/deno-utility-tex-to-text/tex-to-text.ts --infile /d/workspace/github/research-dissertation-case-for-alt-ed/papers/student-debt-history/blinded-student-debt-history.tex`
+//  infile must be a full path in posix syntax. Use spaces at your own risk. Eg prefer `/c/my-file.tex`.
+//  Windows users will enjoy sailhenz.copy-path-linux VS Code plugin to easily copy a file path in a posix syntax.
+//
 //
 // this utility will output a .txt file as a sibling of the tex file which was input
 //
@@ -20,57 +22,57 @@ const encoder = new TextEncoder();
 const EOL = path.EOL;
 
 const handleLine = (sLine: string, bPriorLineEmpty: boolean): [string, boolean] => {
-    // const sCleaned = [sLine].map(s => s.replace(/\\cite\{[\w]*}/g,''))[0];
-    // const isComment = sCleaned.trim()[0] === "%";
-    // const isOmittedFromTextVersion = sCleaned.includes('%%%'); // a convention
-    // const isTechnical = sCleaned.trim()[0] === "\\" || sCleaned.trim()[0] === "}";
-    // const regexMatchIsSectionHeading = sCleaned.match(/\\[a-z]*section{(?<headingText>[A-z- ]*)}/);
-    // const bCurrentLineEmpty = !sCleaned.trim().length;
+    const sCleaned = [sLine].map(s => s.replace(/\\cite\{[\w]*}/g,''))[0];
+    const isComment = sCleaned.trim()[0] === "%";
+    const isOmittedFromTextVersion = sCleaned.includes('%%%'); // a convention
+    const isTechnical = sCleaned.trim()[0] === "\\" || sCleaned.trim()[0] === "}";
+    const regexMatchIsSectionHeading = sCleaned.match(/\\[a-z]*section{(?<headingText>[A-z- ]*)}/);
+    const bCurrentLineEmpty = !sCleaned.trim().length;
 
-    // if (bCurrentLineEmpty && !bPriorLineEmpty) {
-    //     return [EOL, true];
-    // } else if (!bCurrentLineEmpty && !isComment && !isTechnical && !isOmittedFromTextVersion) {
-    //     const bEndsWithComma = sCleaned[sCleaned.length-1] === ',';
-    //     return [bEndsWithComma ? sCleaned.trim() + ' ' : sCleaned.trim() + EOL, false];
-    // } else if(regexMatchIsSectionHeading) {
-    //     const headingText = regexMatchIsSectionHeading.groups && regexMatchIsSectionHeading.groups.headingText;
-    //     if (headingText) return [bPriorLineEmpty ? headingText.trim() + EOL : EOL + headingText.trim() + EOL, true];
-    // }
+    if (bCurrentLineEmpty && !bPriorLineEmpty) {
+        return [EOL, true];
+    } else if (!bCurrentLineEmpty && !isComment && !isTechnical && !isOmittedFromTextVersion) {
+        const bEndsWithComma = sCleaned[sCleaned.length-1] === ',';
+        return [bEndsWithComma ? sCleaned.trim() + ' ' : sCleaned.trim() + EOL, false];
+    } else if(regexMatchIsSectionHeading) {
+        const headingText = regexMatchIsSectionHeading.groups && regexMatchIsSectionHeading.groups.headingText;
+        if (headingText) return [bPriorLineEmpty ? headingText.trim() + EOL : EOL + headingText.trim() + EOL, true];
+    }
 
-    // return ['', bPriorLineEmpty];
-    return ['', false];
+    return ['', bPriorLineEmpty];
 }
 
 export async function read_line(filename: string, lineCallback: (sCurrentLine: string, bPriorLineWasEmpty: boolean) => [string, boolean]): Promise<string> {
   const file = await Deno.open(filename);
-  // const bufReader = new BufReader(file);
-  // let bAllowLineBreak = false;
-  // let sAccumulator = '';
-  // let sCurrentProcessedLine = '';
-  // let readlineResult: ReadLineResult | Deno.EOF;
+  const bufReader = new BufReader(file);
+  let bAllowLineBreak = false;
+  let sAccumulator = '';
+  let sCurrentProcessedLine = '';
+  let readlineResult: ReadLineResult | Deno.EOF;
 
-  // while ((readlineResult = await bufReader.readLine()) !== Deno.EOF) {
-  //   const sCurrentLine = decoder.decode(readlineResult.line);
-  //   [sCurrentProcessedLine, bAllowLineBreak] = lineCallback(sCurrentLine, bAllowLineBreak);
-  //   sAccumulator += sCurrentProcessedLine;
-  // }
+  while ((readlineResult = await bufReader.readLine()) !== Deno.EOF) {
+    const sCurrentLine = decoder.decode(readlineResult.line);
+    [sCurrentProcessedLine, bAllowLineBreak] = lineCallback(sCurrentLine, bAllowLineBreak);
+    sAccumulator += sCurrentProcessedLine;
+  }
 
   file.close();
-  // return sAccumulator;
-  return Promise.resolve('fake typed result');
+  return sAccumulator;
 }
 
 const parsedArgs = parse(args);
-const inpath = parsedArgs.infile;
-const outpath = inpath && inpath.replace('.tex', '.txt');
+const infile = parsedArgs.infile;
 
-if (inpath && outpath) {
-  // const normalizedInpath = new URL(inpath, import.meta.url).pathname;
-  const sOut = await read_line(inpath, handleLine);
-  // await Deno.writeFile(outpath, encoder.encode(sOut));
-  console.log('hai')
+// If the first segment of `inpath` looks like a drive letter, add a leading slash before URL basing and remove it afterwards.
+// ref: https://github.com/denoland/deno/issues/4915#issuecomment-619699680
+const normalizedInpath = new URL(infile.replace(/(?=^[A-Z]:[/\/])/, "/"), import.meta.url).pathname.replace(/^\/(?=[A-Z]:\/)/, "");
+const outfile = normalizedInpath && normalizedInpath.replace('.tex', '.txt') || '';
+
+if (outfile) {
+  const sOut = await read_line(normalizedInpath, handleLine);
+  await Deno.writeFile(outfile, encoder.encode(sOut));
 } else {
-  console.log('failed to parse infile, inpath, or outpath.')
+  console.log('Error: Unexpected outfile');
 }
 
 export {}
