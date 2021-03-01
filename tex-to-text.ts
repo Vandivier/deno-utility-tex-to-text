@@ -1,25 +1,25 @@
 // @ts-ignore: 1375
 //
 // run like `deno --allow-read --allow-write tex-to-text.ts --infile <<path-to-tex-file>>`
-//  infile must be a full path in posix syntax. Use spaces at your own risk. Eg prefer `/c/my-file.tex`.
+//  infile can be full or relative, but must follow posix syntax. Use spaces at your own risk. Eg prefer `/c/my-file.tex`.
 //  Windows users will enjoy sailhenz.copy-path-linux VS Code plugin to easily copy a file path in a posix syntax.
 //
 //
 // this utility will output a .txt file as a sibling of the tex file which was input
 //
-// built with
-//    deno: "0.41.0"
+// validated with
+//    deno: "1.7.5"
 //
 // TODO: follow up on this issue: https://github.com/denoland/deno/issues/4915
+// TODO: this issue https://github.com/denoland/deno/issues/4631
 
 const { args } = Deno;
 import { BufReader, ReadLineResult } from "https://deno.land/std/io/bufio.ts";
-import * as path from "https://deno.land/std/path/mod.ts";
 import { parse } from "https://deno.land/std/flags/mod.ts";
+import {EOL} from "https://deno.land/std/fs/eol.ts";
 
 const decoder = new TextDecoder();
 const encoder = new TextEncoder();
-const EOL = path.EOL;
 
 const handleLine = (sLine: string, bPriorLineEmpty: boolean): [string, boolean] => {
     const sCleaned = [sLine].map(s => s.replace(/\\cite\{[\w]*}/g,''))[0];
@@ -30,13 +30,13 @@ const handleLine = (sLine: string, bPriorLineEmpty: boolean): [string, boolean] 
     const bCurrentLineEmpty = !sCleaned.trim().length;
 
     if (bCurrentLineEmpty && !bPriorLineEmpty) {
-        return [EOL, true];
+        return [EOL.LF, true];
     } else if (!bCurrentLineEmpty && !isComment && !isTechnical && !isOmittedFromTextVersion) {
         const bEndsWithComma = sCleaned[sCleaned.length-1] === ',';
-        return [bEndsWithComma ? sCleaned.trim() + ' ' : sCleaned.trim() + EOL, false];
+        return [bEndsWithComma ? sCleaned.trim() + ' ' : sCleaned.trim() + EOL.LF, false];
     } else if(regexMatchIsSectionHeading) {
         const headingText = regexMatchIsSectionHeading.groups && regexMatchIsSectionHeading.groups.headingText;
-        if (headingText) return [bPriorLineEmpty ? headingText.trim() + EOL : EOL + headingText.trim() + EOL, true];
+        if (headingText) return [bPriorLineEmpty ? headingText.trim() + EOL.LF : EOL.LF + headingText.trim() + EOL.LF, true];
     }
 
     return ['', bPriorLineEmpty];
@@ -48,9 +48,9 @@ export async function read_line(filename: string, lineCallback: (sCurrentLine: s
   let bAllowLineBreak = false;
   let sAccumulator = '';
   let sCurrentProcessedLine = '';
-  let readlineResult: ReadLineResult | Deno.EOF;
+  let readlineResult: ReadLineResult | null;
 
-  while ((readlineResult = await bufReader.readLine()) !== Deno.EOF) {
+  while ((readlineResult = await bufReader.readLine()) !== null) {
     const sCurrentLine = decoder.decode(readlineResult.line);
     [sCurrentProcessedLine, bAllowLineBreak] = lineCallback(sCurrentLine, bAllowLineBreak);
     sAccumulator += sCurrentProcessedLine;
