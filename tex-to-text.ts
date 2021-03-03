@@ -1,6 +1,6 @@
 // @ts-ignore: 1375
 //
-// run like `deno --allow-read --allow-write tex-to-text.ts --infile <<path-to-tex-file>>`
+// run like `deno run --allow-read --allow-write tex-to-text.ts --infile <<path-to-tex-file>>`
 //  infile can be full or relative, but must follow posix syntax. Use spaces at your own risk. Eg prefer `/c/my-file.tex`.
 //  Windows users will enjoy sailhenz.copy-path-linux VS Code plugin to easily copy a file path in a posix syntax.
 //
